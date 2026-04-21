@@ -1,6 +1,6 @@
 import numpy as np
-import random
 from config import PARTICLES, BOUNDARY
+
 
 class ParticleSystem:
     def __init__(self):
@@ -11,15 +11,19 @@ class ParticleSystem:
         self.positions += self.velocities
         self.velocities *= 0.985
 
-        for i in range(len(self.positions)):
-            if np.linalg.norm(self.positions[i]) > BOUNDARY:
-                self.positions[i] = self.positions[i] / np.linalg.norm(self.positions[i]) * BOUNDARY
-                self.velocities[i] *= -0.5
+        # Vectorized boundary clamp — replaces the O(n) Python loop
+        norms = np.linalg.norm(self.positions, axis=1)          # (N,)
+        over = norms > BOUNDARY                                  # bool mask
+        if np.any(over):
+            scale = BOUNDARY / norms[over, np.newaxis]           # broadcast-safe
+            self.positions[over] = self.positions[over] * scale
+            self.velocities[over] *= -0.5
 
     def burst(self):
-        for i in range(len(self.positions)):
-            direction = np.random.uniform(-1, 1, 3)
-            direction /= (np.linalg.norm(direction) + 0.001)
+        # Fully vectorized random burst — replaces the O(n) Python loop
+        directions = np.random.uniform(-1, 1, (len(self.positions), 3))
+        norms = np.linalg.norm(directions, axis=1, keepdims=True)
+        directions /= norms + 1e-6
 
-            speed = random.uniform(6.0, 10.0)
-            self.velocities[i] = direction * speed
+        speeds = np.random.uniform(6.0, 10.0, (len(self.positions), 1))
+        self.velocities[:] = directions * speeds
